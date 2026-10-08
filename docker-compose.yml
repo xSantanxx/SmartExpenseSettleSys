@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: sess-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sess
+      POSTGRES_PASSWORD: sess
+      POSTGRES_DB: smart_expense
+    ports:
+      - "5433:5432"
+    volumes:
+      - sess_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sess -d smart_expense"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  sess_pgdata:
