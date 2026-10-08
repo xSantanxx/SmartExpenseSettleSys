@@ -27,7 +27,8 @@ export function createApp() {
                 callback(null, true);
                 return;
               }
-              callback(new Error(`Origin ${origin} not allowed by CORS`));
+              // Do not throw — throwing turns CORS failures into opaque 500s.
+              callback(null, false);
             },
     })
   );

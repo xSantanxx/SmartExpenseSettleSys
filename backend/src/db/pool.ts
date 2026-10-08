@@ -1,4 +1,5 @@
 import pg from "pg";
+import { pgConnectionOptions } from "./pgConfig.js";
 
 let pool: pg.Pool | null = null;
 
@@ -11,7 +12,7 @@ export function getPool(databaseUrl = process.env.DATABASE_URL): pg.Pool {
   if (!databaseUrl) {
     throw new Error("DATABASE_URL is required");
   }
-  pool = new pg.Pool({ connectionString: databaseUrl });
+  pool = new pg.Pool(pgConnectionOptions(databaseUrl));
   return pool;
 }
 

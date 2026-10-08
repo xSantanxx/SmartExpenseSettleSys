@@ -1,7 +1,10 @@
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { config } from "../config.js";
 
-/** Hash a plaintext password. Never store the plaintext. */
+/**
+ * Hash a plaintext password.
+ * Uses bcryptjs (pure JS) so Render/Linux deploys don't need native bcrypt builds.
+ */
 export async function hashPassword(plaintext: string): Promise<string> {
   return bcrypt.hash(plaintext, config.bcryptRounds());
 }

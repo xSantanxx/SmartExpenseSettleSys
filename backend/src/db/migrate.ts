@@ -9,6 +9,7 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
+import { pgConnectionOptions } from "./pgConfig.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = path.resolve(__dirname, "../../db/migrations");
@@ -19,7 +20,7 @@ async function migrate(): Promise<void> {
     throw new Error("DATABASE_URL is required (see backend/.env.example)");
   }
 
-  const client = new pg.Client({ connectionString: databaseUrl });
+  const client = new pg.Client(pgConnectionOptions(databaseUrl));
   await client.connect();
 
   try {
