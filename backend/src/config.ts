@@ -28,13 +28,13 @@ export const config = {
   /**
    * Comma-separated browser origins allowed to call the API.
    * Example: https://smart-expense.vercel.app
-   * Empty in development → reflect any origin (local Vite).
+   * Trailing slashes are stripped. Empty → allow any origin (dev / easy deploy).
    */
   frontendOrigins: (): string[] => {
     const raw = process.env.FRONTEND_ORIGIN ?? "";
     return raw
       .split(",")
-      .map((s) => s.trim())
+      .map((s) => s.trim().replace(/\/$/, ""))
       .filter(Boolean);
   },
 };

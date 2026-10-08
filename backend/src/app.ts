@@ -16,22 +16,28 @@ export function createApp() {
   const app = express();
 
   const allowed = config.frontendOrigins();
-  app.use(
-    cors({
-      origin:
-        allowed.length === 0
-          ? true // local/dev: allow Vite / curl
-          : (origin, callback) => {
-              // Non-browser clients (no Origin) and allowlisted frontends.
-              if (!origin || allowed.includes(origin)) {
-                callback(null, true);
-                return;
-              }
-              // Do not throw — throwing turns CORS failures into opaque 500s.
-              callback(null, false);
-            },
-    })
-  );
+  const corsOptions: cors.CorsOptions = {
+    origin: (origin, callback) => {
+      // curl / server-to-server: no Origin header
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      const normalized = origin.replace(/\/$/, "");
+      // Empty allowlist = allow all (simplest for demos). Otherwise exact match.
+      if (allowed.length === 0 || allowed.includes(normalized)) {
+        callback(null, true);
+        return;
+      }
+      console.warn(
+        `CORS blocked origin="${origin}" allowed=[${allowed.join(", ")}]`
+      );
+      callback(null, false);
+    },
+  };
+  app.use(cors(corsOptions));
+  // Express 5 can skip CORS on OPTIONS unless we register it explicitly.
+  app.options(/.*/, cors(corsOptions));
   app.use(express.json({ limit: "100kb" }));
 
   app.get("/health", (_req, res) => {
