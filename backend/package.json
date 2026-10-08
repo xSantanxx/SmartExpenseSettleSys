@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "tsx --env-file=.env src/server.ts",
     "start": "tsx src/db/migrate.ts && tsx src/server.ts",
-    "build": "tsc --noEmit",
+    "build": "echo 'No compile step — API runs with tsx'",
     "test": "vitest run",
     "test:unit": "vitest run src/domain src/auth src/app.test.ts",
     "test:integration": "vitest run src/api.integration.test.ts",

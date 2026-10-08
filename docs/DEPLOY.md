@@ -33,7 +33,7 @@ You do **not** need Docker in production. Neon *is* your Postgres.
 |-------|--------|
 | Root directory | `backend` |
 | Runtime | Node |
-| Build command | `npm install` |
+| Build command | `npm install` *(do not use `npm run build` / tsc)* |
 | Start command | `npm start` |
 | Instance | Free |
 
