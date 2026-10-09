@@ -134,6 +134,13 @@ h2 {
   margin-bottom: 1.25rem;
 }
 
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .muted {
   color: var(--muted);
 }

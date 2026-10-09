@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../api/client";
 import type {
   ExpenseDetail,
@@ -18,8 +18,10 @@ interface FriendPrompt {
 
 export function GroupPage() {
   const { groupId = "" } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [group, setGroup] = useState<GroupDetail | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [expenses, setExpenses] = useState<ExpenseDetail[]>([]);
   const [summary, setSummary] = useState<GroupSummaryPayload | null>(null);
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -152,6 +154,26 @@ export function GroupPage() {
   const pending = summary?.settlements.filter((s) => s.status === "PENDING") ?? [];
   const completed =
     summary?.settlements.filter((s) => s.status === "COMPLETED") ?? [];
+  const isCreator = Boolean(group && user && group.createdBy === user.id);
+
+  async function onDeleteGroup() {
+    if (
+      !confirm(
+        `Delete "${group?.name}"? This removes expenses, settlements, and subscriptions permanently.`
+      )
+    ) {
+      return;
+    }
+    setDeleting(true);
+    setError(null);
+    try {
+      await api.deleteGroup(groupId);
+      navigate("/");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not delete group");
+      setDeleting(false);
+    }
+  }
 
   return (
     <div className="page">
@@ -167,9 +189,21 @@ export function GroupPage() {
             <span className="money">${summary?.totalSpent ?? "0.00"}</span>
           </p>
         </div>
-        <Link className="btn btn-primary" to={`/groups/${groupId}/expenses/new`}>
-          Add expense
-        </Link>
+        <div className="header-actions">
+          <Link className="btn btn-primary" to={`/groups/${groupId}/expenses/new`}>
+            Add expense
+          </Link>
+          {isCreator && (
+            <button
+              type="button"
+              className="btn btn-ghost danger"
+              disabled={deleting}
+              onClick={() => void onDeleteGroup()}
+            >
+              {deleting ? "Deleting…" : "Delete group"}
+            </button>
+          )}
+        </div>
       </div>
 
       {error && <p className="error-banner">{error}</p>}

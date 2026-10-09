@@ -179,6 +179,10 @@ export const api = {
     return request(`/groups/${groupId}`);
   },
 
+  deleteGroup(groupId: string): Promise<void> {
+    return request(`/groups/${groupId}`, { method: "DELETE" });
+  },
+
   addMember(groupId: string, email: string): Promise<GroupDetail> {
     return request(`/groups/${groupId}/members`, {
       method: "POST",
