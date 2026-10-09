@@ -10,16 +10,23 @@ export interface SubscriptionMemberView {
   email: string;
   shareCents: number;
   share: string;
-  status: "PENDING" | "PAID";
+  status: "PENDING" | "PAID" | "UPCOMING";
   paidAt: string | null;
+  /** First period (YYYY-MM) this person owes a share. */
+  effectiveFromPeriod: string;
 }
 
 export interface SubscriptionDetail {
   id: string;
   groupId: string;
   name: string;
+  /** Price used for the current billing period. */
   amountCents: number;
   amount: string;
+  /** Scheduled price change (applies from pendingFromPeriod / next billing cycle). */
+  pendingAmountCents: number | null;
+  pendingAmount: string | null;
+  pendingFromPeriod: string | null;
   billingDay: number;
   periodKey: string;
   nextBillingDate: string;
@@ -29,7 +36,7 @@ export interface SubscriptionDetail {
   members: SubscriptionMemberView[];
   yourShareCents: number;
   yourShare: string;
-  yourStatus: "PENDING" | "PAID" | "NOT_MEMBER";
+  yourStatus: "PENDING" | "PAID" | "UPCOMING" | "NOT_MEMBER";
 }
 
 /** Current billing period YYYY-MM based on billing day. */
@@ -56,11 +63,59 @@ export function nextBillingDateIso(billingDay: number, now = new Date()): string
 }
 
 /**
- * Ensure every current member has a payment row for this period.
- * Equal shares are recomputed from amount_cents / member count.
- * Already-PAID rows keep their recorded share; pending rows are refreshed.
+ * Period key that begins on the next billing date — used for late joiners so
+ * the current cycle keeps its split until that date passes.
  */
-/** Ensure payment rows exist for the period (used by list/add and reminder cron). */
+export function nextPeriodKey(billingDay: number, now = new Date()): string {
+  const nextIso = nextBillingDateIso(billingDay, now);
+  const [ys, ms, ds] = nextIso.split("-").map(Number);
+  return currentPeriodKey(billingDay, new Date(Date.UTC(ys, ms - 1, ds)));
+}
+
+/** Resolve which price applies for a given period key. */
+export function amountForPeriod(
+  amountCents: number,
+  pendingAmountCents: number | null,
+  pendingFromPeriod: string | null,
+  periodKey: string
+): number {
+  if (
+    pendingAmountCents != null &&
+    pendingFromPeriod != null &&
+    periodKey >= pendingFromPeriod
+  ) {
+    return pendingAmountCents;
+  }
+  return amountCents;
+}
+
+/**
+ * When the current period has reached a scheduled price change, promote it
+ * into amount_cents so history stays simple.
+ */
+async function promotePendingAmountIfDue(
+  subscriptionId: string,
+  billingDay: number,
+  now = new Date()
+): Promise<void> {
+  const periodKey = currentPeriodKey(billingDay, now);
+  await getPool().query(
+    `UPDATE subscriptions
+     SET amount_cents = pending_amount_cents,
+         pending_amount_cents = NULL,
+         pending_from_period = NULL
+     WHERE id = $1
+       AND pending_amount_cents IS NOT NULL
+       AND pending_from_period IS NOT NULL
+       AND pending_from_period <= $2`,
+    [subscriptionId, periodKey]
+  );
+}
+
+/**
+ * Ensure members effective for this period have payment rows.
+ * Equal shares among those people only. Already-PAID rows keep their share.
+ */
 export async function syncPeriodPayments(
   subscriptionId: string,
   amountCents: number,
@@ -68,8 +123,11 @@ export async function syncPeriodPayments(
 ): Promise<void> {
   const pool = getPool();
   const members = await pool.query<{ user_id: string }>(
-    `SELECT user_id FROM subscription_members WHERE subscription_id = $1 ORDER BY joined_at`,
-    [subscriptionId]
+    `SELECT user_id FROM subscription_members
+     WHERE subscription_id = $1
+       AND effective_from_period <= $2
+     ORDER BY joined_at`,
+    [subscriptionId, periodKey]
   );
   if (members.rowCount === 0) return;
 
@@ -127,11 +185,21 @@ async function loadSubscriptionDetail(
   requesterId: string
 ): Promise<SubscriptionDetail> {
   const pool = getPool();
+  const first = await pool.query<{ billing_day: number; group_id: string }>(
+    `SELECT billing_day, group_id FROM subscriptions WHERE id = $1`,
+    [subscriptionId]
+  );
+  if (first.rowCount === 0) throw notFound("Subscription not found");
+  await assertGroupMember(first.rows[0].group_id, requesterId);
+  await promotePendingAmountIfDue(subscriptionId, first.rows[0].billing_day);
+
   const sub = await pool.query<{
     id: string;
     group_id: string;
     name: string;
     amount_cents: number;
+    pending_amount_cents: number | null;
+    pending_from_period: string | null;
     billing_day: number;
     created_by: string;
     created_at: Date;
@@ -140,10 +208,15 @@ async function loadSubscriptionDetail(
 
   if (sub.rowCount === 0) throw notFound("Subscription not found");
   const row = sub.rows[0];
-  await assertGroupMember(row.group_id, requesterId);
 
   const periodKey = currentPeriodKey(row.billing_day);
-  await syncPeriodPayments(row.id, row.amount_cents, periodKey);
+  const periodAmount = amountForPeriod(
+    row.amount_cents,
+    row.pending_amount_cents,
+    row.pending_from_period,
+    periodKey
+  );
+  await syncPeriodPayments(row.id, periodAmount, periodKey);
 
   const members = await pool.query<{
     user_id: string;
@@ -152,9 +225,11 @@ async function loadSubscriptionDetail(
     share_cents: number | null;
     status: string | null;
     paid_at: Date | null;
+    effective_from_period: string;
   }>(
     `SELECT u.id AS user_id, u.display_name, u.email,
-            p.share_cents, p.status, p.paid_at
+            p.share_cents, p.status, p.paid_at,
+            sm.effective_from_period
      FROM subscription_members sm
      INNER JOIN users u ON u.id = sm.user_id
      LEFT JOIN subscription_payments p
@@ -166,7 +241,33 @@ async function loadSubscriptionDetail(
     [subscriptionId, periodKey]
   );
 
-  const memberViews: SubscriptionMemberView[] = members.rows.map((m) => {
+  const nextKey = nextPeriodKey(row.billing_day);
+  const nextAmount = amountForPeriod(
+    row.amount_cents,
+    row.pending_amount_cents,
+    row.pending_from_period,
+    nextKey
+  );
+  const projectedNextShares =
+    members.rows.length > 0
+      ? splitEvenly(nextAmount, members.rows.length)
+      : [];
+
+  const memberViews: SubscriptionMemberView[] = members.rows.map((m, index) => {
+    const upcoming = m.effective_from_period > periodKey;
+    if (upcoming) {
+      const shareCents = projectedNextShares[index] ?? 0;
+      return {
+        userId: m.user_id,
+        displayName: m.display_name,
+        email: m.email,
+        shareCents,
+        share: centsToDollars(shareCents),
+        status: "UPCOMING" as const,
+        paidAt: null,
+        effectiveFromPeriod: m.effective_from_period,
+      };
+    }
     const shareCents = Number(m.share_cents ?? 0);
     const status = (m.status as "PENDING" | "PAID") ?? "PENDING";
     return {
@@ -177,6 +278,7 @@ async function loadSubscriptionDetail(
       share: centsToDollars(shareCents),
       status,
       paidAt: m.paid_at ? m.paid_at.toISOString() : null,
+      effectiveFromPeriod: m.effective_from_period,
     };
   });
 
@@ -186,8 +288,14 @@ async function loadSubscriptionDetail(
     id: row.id,
     groupId: row.group_id,
     name: row.name,
-    amountCents: row.amount_cents,
-    amount: centsToDollars(row.amount_cents),
+    amountCents: periodAmount,
+    amount: centsToDollars(periodAmount),
+    pendingAmountCents: row.pending_amount_cents,
+    pendingAmount:
+      row.pending_amount_cents != null
+        ? centsToDollars(row.pending_amount_cents)
+        : null,
+    pendingFromPeriod: row.pending_from_period,
     billingDay: row.billing_day,
     periodKey,
     nextBillingDate: nextBillingDateIso(row.billing_day),
@@ -199,6 +307,59 @@ async function loadSubscriptionDetail(
     yourShare: yours ? yours.share : "0.00",
     yourStatus: yours ? yours.status : "NOT_MEMBER",
   };
+}
+
+/**
+ * Schedule a new monthly price starting next billing period.
+ * Current period shares stay on the old amount.
+ */
+export async function updateSubscriptionAmount(
+  subscriptionId: string,
+  requesterId: string,
+  amountInput: string | number
+): Promise<SubscriptionDetail> {
+  const pool = getPool();
+  const sub = await pool.query<{
+    group_id: string;
+    amount_cents: number;
+    pending_amount_cents: number | null;
+    pending_from_period: string | null;
+    billing_day: number;
+    active: boolean;
+  }>(
+    `SELECT group_id, amount_cents, pending_amount_cents, pending_from_period,
+            billing_day, active
+     FROM subscriptions WHERE id = $1`,
+    [subscriptionId]
+  );
+  if (sub.rowCount === 0) throw notFound("Subscription not found");
+  const row = sub.rows[0];
+  if (!row.active) throw badRequest("Subscription is ended");
+  await assertGroupMember(row.group_id, requesterId);
+
+  const newCents = dollarsToCents(amountInput);
+  const fromPeriod = nextPeriodKey(row.billing_day);
+  const currentPeriod = currentPeriodKey(row.billing_day);
+
+  // Cancel a pending change by setting the amount back to the current price.
+  if (newCents === row.amount_cents && currentPeriod < fromPeriod) {
+    await pool.query(
+      `UPDATE subscriptions
+       SET pending_amount_cents = NULL, pending_from_period = NULL
+       WHERE id = $1`,
+      [subscriptionId]
+    );
+    return loadSubscriptionDetail(subscriptionId, requesterId);
+  }
+
+  await pool.query(
+    `UPDATE subscriptions
+     SET pending_amount_cents = $1, pending_from_period = $2
+     WHERE id = $3`,
+    [newCents, fromPeriod, subscriptionId]
+  );
+
+  return loadSubscriptionDetail(subscriptionId, requesterId);
 }
 
 export async function listSubscriptions(
@@ -258,10 +419,13 @@ export async function createSubscription(
       [groupId, name, amountCents, billingDay, requesterId]
     );
     id = inserted.rows[0].id;
+    const startPeriod = currentPeriodKey(billingDay);
     for (const userId of memberIds) {
       await client.query(
-        `INSERT INTO subscription_members (subscription_id, user_id) VALUES ($1, $2)`,
-        [id, userId]
+        `INSERT INTO subscription_members
+           (subscription_id, user_id, effective_from_period)
+         VALUES ($1, $2, $3)`,
+        [id, userId, startPeriod]
       );
     }
     await client.query("COMMIT");
@@ -335,12 +499,15 @@ export async function addSubscriptionMember(
     throw err;
   }
 
+  // Late joiners bill from the next cycle so this period's split stays as-is.
+  const startsPeriod = nextPeriodKey(billingDay);
   const inserted = await pool.query<{ user_id: string }>(
-    `INSERT INTO subscription_members (subscription_id, user_id)
-     VALUES ($1, $2)
+    `INSERT INTO subscription_members
+       (subscription_id, user_id, effective_from_period)
+     VALUES ($1, $2, $3)
      ON CONFLICT DO NOTHING
      RETURNING user_id`,
-    [subscriptionId, userId]
+    [subscriptionId, userId, startsPeriod]
   );
   const newlyAdded = (inserted.rowCount ?? 0) > 0;
 
@@ -363,7 +530,8 @@ export async function addSubscriptionMember(
         totalAmountCents: detail.amountCents,
         shareCents: member.shareCents,
         nextBillingDate: detail.nextBillingDate,
-        periodKey: detail.periodKey,
+        periodKey: startsPeriod,
+        startsNextCycle: true,
       }).catch((err) => console.error("Add-to-subscription email failed:", err));
     }
   }
@@ -413,6 +581,11 @@ export async function markSubscriptionPaid(
   const detail = await loadSubscriptionDetail(subscriptionId, requesterId);
   if (detail.yourStatus === "NOT_MEMBER") {
     throw forbidden("You are not on this subscription");
+  }
+  if (detail.yourStatus === "UPCOMING") {
+    throw badRequest(
+      "Your share starts after the next billing date — nothing to mark paid yet"
+    );
   }
   if (detail.yourStatus === "PAID") {
     return detail;

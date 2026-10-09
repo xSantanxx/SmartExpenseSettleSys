@@ -29,6 +29,8 @@ export function SubscriptionsSection({
   const [addFriendPick, setAddFriendPick] = useState<Record<string, string>>(
     {}
   );
+  const [priceDraft, setPriceDraft] = useState<Record<string, string>>({});
+  const [editingPrice, setEditingPrice] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   async function load() {
@@ -148,14 +150,36 @@ export function SubscriptionsSection({
     }
   }
 
+  async function onUpdatePrice(subscriptionId: string) {
+    const amount = (priceDraft[subscriptionId] ?? "").trim();
+    if (!amount) {
+      setError("Enter the new monthly price");
+      return;
+    }
+    setBusy(subscriptionId);
+    setError(null);
+    try {
+      await api.updateSubscriptionAmount(groupId, subscriptionId, amount);
+      setEditingPrice(null);
+      await load();
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Could not update price"
+      );
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <section className="section">
       <div className="page-header" style={{ marginBottom: "0.75rem" }}>
         <div>
           <h2>Shared subscriptions</h2>
           <p className="muted" style={{ margin: 0 }}>
-            Split streaming bills evenly. Shares update when people join or leave.
-            Unpaid members get an email reminder within 3 days of the billing day.
+            Split streaming bills evenly. People added later join the split after
+            the next billing date. Unpaid members get a reminder within 3 days of
+            billing day.
           </p>
         </div>
         <button
@@ -292,13 +316,80 @@ export function SubscriptionsSection({
                   {sub.yourStatus === "PAID" && (
                     <span className="tag">You paid this period</span>
                   )}
+                  {sub.yourStatus === "UPCOMING" && (
+                    <span className="tag">
+                      Starts {sub.nextBillingDate} (~${sub.yourShare})
+                    </span>
+                  )}
                 </div>
 
                 <p className="hint">
                   Period {sub.periodKey} · your share{" "}
                   <span className="money">${sub.yourShare}</span> (
-                  {sub.members.length} people)
+                  {
+                    sub.members.filter((m) => m.status !== "UPCOMING").length
+                  }{" "}
+                  splitting this period
+                  {sub.members.some((m) => m.status === "UPCOMING")
+                    ? ` · ${sub.members.filter((m) => m.status === "UPCOMING").length} start next cycle`
+                    : ""}
+                  )
                 </p>
+
+                {sub.pendingAmount && (
+                  <p className="hint">
+                    Price changes to{" "}
+                    <span className="money">${sub.pendingAmount}</span> from
+                    period {sub.pendingFromPeriod} (after {sub.nextBillingDate}).
+                    This period stays at ${sub.amount}.
+                  </p>
+                )}
+
+                {editingPrice === sub.id ? (
+                  <div className="inline-form">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="New monthly price"
+                      value={priceDraft[sub.id] ?? sub.pendingAmount ?? sub.amount}
+                      onChange={(e) =>
+                        setPriceDraft((p) => ({
+                          ...p,
+                          [sub.id]: e.target.value,
+                        }))
+                      }
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={busy === sub.id}
+                      onClick={() => void onUpdatePrice(sub.id)}
+                    >
+                      Save for next cycle
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      onClick={() => setEditingPrice(null)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => {
+                      setEditingPrice(sub.id);
+                      setPriceDraft((p) => ({
+                        ...p,
+                        [sub.id]: sub.pendingAmount ?? sub.amount,
+                      }));
+                    }}
+                  >
+                    Update price
+                  </button>
+                )}
 
                 <ul className="plain-list">
                   {sub.members.map((m) => (
@@ -307,7 +398,12 @@ export function SubscriptionsSection({
                       <span className="money"> ${m.share}</span>
                       <span className="muted">
                         {" "}
-                        · {m.status === "PAID" ? "paid" : "pending"}
+                        ·{" "}
+                        {m.status === "PAID"
+                          ? "paid"
+                          : m.status === "UPCOMING"
+                            ? `starts ${m.effectiveFromPeriod}`
+                            : "pending"}
                       </span>
                       {m.userId !== user?.id && (
                         <button

@@ -42,7 +42,10 @@ export function createApp() {
   app.use(express.json({ limit: "100kb" }));
 
   app.get("/health", (_req, res) => {
-    res.json({ status: "ok" });
+    res.json({
+      status: "ok",
+      emailConfigured: Boolean(config.resendApiKey()),
+    });
   });
 
   app.use("/auth", authRouter);

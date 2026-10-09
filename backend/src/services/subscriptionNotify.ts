@@ -14,20 +14,29 @@ export async function notifyAddedToSubscription(opts: {
   shareCents: number;
   nextBillingDate: string;
   periodKey: string;
+  /** True when they join mid-cycle and start after the next billing date. */
+  startsNextCycle?: boolean;
 }): Promise<boolean> {
   const total = centsToDollars(opts.totalAmountCents);
   const share = centsToDollars(opts.shareCents);
+  const timing = opts.startsNextCycle
+    ? `You are on the roster now, but your split starts after the next billing date (${opts.nextBillingDate}). ` +
+      `From period ${opts.periodKey} onward your share will be about $${share}.\n`
+    : `Your portion for period ${opts.periodKey} is $${share}.\n` +
+      `Next billing date: ${opts.nextBillingDate}.\n`;
+
   const text =
     `Hi ${opts.toDisplayName},\n\n` +
     `${opts.addedByName} added you to the shared subscription "${opts.subscriptionName}" ` +
     `($${total}/month) on Smart Expense Settlement.\n\n` +
-    `Your portion for period ${opts.periodKey} is $${share}.\n` +
-    `Next billing date: ${opts.nextBillingDate}.\n\n` +
-    `Open the group in the app to mark your share paid when you've paid.\n`;
+    timing +
+    `\nOpen the group in the app when it's time to mark your share paid.\n`;
 
   return sendEmail({
     to: opts.toEmail,
-    subject: `Added to ${opts.subscriptionName} — $${share} due ${opts.nextBillingDate}`,
+    subject: opts.startsNextCycle
+      ? `Added to ${opts.subscriptionName} — ~$${share} starting ${opts.nextBillingDate}`
+      : `Added to ${opts.subscriptionName} — $${share} due ${opts.nextBillingDate}`,
     text,
   });
 }

@@ -2,6 +2,7 @@ import { getPool } from "../db/pool.js";
 import { centsToDollars } from "../domain/money.js";
 import { sendEmail } from "./email.js";
 import {
+  amountForPeriod,
   currentPeriodKey,
   nextBillingDateIso,
   syncPeriodPayments,
@@ -41,10 +42,13 @@ export async function runSubscriptionReminders(
     id: string;
     name: string;
     amount_cents: number;
+    pending_amount_cents: number | null;
+    pending_from_period: string | null;
     billing_day: number;
     last_reminded_period: string | null;
   }>(
-    `SELECT id, name, amount_cents, billing_day, last_reminded_period
+    `SELECT id, name, amount_cents, pending_amount_cents, pending_from_period,
+            billing_day, last_reminded_period
      FROM subscriptions
      WHERE active = TRUE`
   );
@@ -69,7 +73,13 @@ export async function runSubscriptionReminders(
       continue;
     }
 
-    await syncPeriodPayments(sub.id, sub.amount_cents, periodKey);
+    const periodAmount = amountForPeriod(
+      sub.amount_cents,
+      sub.pending_amount_cents,
+      sub.pending_from_period,
+      periodKey
+    );
+    await syncPeriodPayments(sub.id, periodAmount, periodKey);
 
     const unpaid = await pool.query<{
       email: string;
@@ -96,7 +106,7 @@ export async function runSubscriptionReminders(
     let sentAny = false;
     for (const person of unpaid.rows) {
       const share = centsToDollars(Number(person.share_cents));
-      const total = centsToDollars(sub.amount_cents);
+      const total = centsToDollars(periodAmount);
       const when =
         days === 0
           ? `today (${nextDate})`

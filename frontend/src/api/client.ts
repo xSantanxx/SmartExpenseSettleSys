@@ -302,6 +302,17 @@ export const api = {
     );
   },
 
+  updateSubscriptionAmount(
+    groupId: string,
+    subscriptionId: string,
+    amount: string
+  ): Promise<SubscriptionDetail> {
+    return request(`/groups/${groupId}/subscriptions/${subscriptionId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ amount }),
+    });
+  },
+
   deactivateSubscription(
     groupId: string,
     subscriptionId: string

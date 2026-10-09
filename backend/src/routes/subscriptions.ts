@@ -38,6 +38,19 @@ subscriptionsRouter.post(
   })
 );
 
+/** PATCH /groups/:groupId/subscriptions/:subscriptionId — schedule new price */
+subscriptionsRouter.patch(
+  "/:subscriptionId",
+  asyncHandler(async (req, res) => {
+    const updated = await subscriptions.updateSubscriptionAmount(
+      param(req, "subscriptionId"),
+      req.userId,
+      req.body.amount
+    );
+    res.json(updated);
+  })
+);
+
 /** POST /groups/:groupId/subscriptions/:subscriptionId/members */
 subscriptionsRouter.post(
   "/:subscriptionId/members",

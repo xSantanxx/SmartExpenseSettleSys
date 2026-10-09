@@ -113,8 +113,9 @@ export interface SubscriptionMember {
   email: string;
   shareCents: number;
   share: string;
-  status: "PENDING" | "PAID";
+  status: "PENDING" | "PAID" | "UPCOMING";
   paidAt: string | null;
+  effectiveFromPeriod: string;
 }
 
 export interface SubscriptionDetail {
@@ -123,6 +124,9 @@ export interface SubscriptionDetail {
   name: string;
   amountCents: number;
   amount: string;
+  pendingAmountCents: number | null;
+  pendingAmount: string | null;
+  pendingFromPeriod: string | null;
   billingDay: number;
   periodKey: string;
   nextBillingDate: string;
@@ -132,5 +136,5 @@ export interface SubscriptionDetail {
   members: SubscriptionMember[];
   yourShareCents: number;
   yourShare: string;
-  yourStatus: "PENDING" | "PAID" | "NOT_MEMBER";
+  yourStatus: "PENDING" | "PAID" | "UPCOMING" | "NOT_MEMBER";
 }

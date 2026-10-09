@@ -121,7 +121,8 @@ Even split of a recurring bill (Netflix, Spotify, etc.).
 |--------|------|-------|
 | `GET` | `/groups/:groupId/subscriptions` | Active subscriptions + current period |
 | `POST` | `/groups/:groupId/subscriptions` | `{ name, amount, billingDay (1–28), memberIds[] }` — emails co-members when Resend is set |
-| `POST` | `/groups/:groupId/subscriptions/:id/members` | `{ email }` or `{ userId }` — must be a **registered** group member; shares rebalance; emails the new person |
+| `PATCH` | `/groups/:groupId/subscriptions/:id` | `{ amount }` — schedules a price change for the **next** billing period; current period unchanged |
+| `POST` | `/groups/:groupId/subscriptions/:id/members` | `{ email }` or `{ userId }` — registered group member; current period keeps its split; new person + rebalanced split start after the next billing date; emails them |
 | `DELETE` | `/groups/:groupId/subscriptions/:id/members/:memberId` | Shares rebalance |
 | `POST` | `/groups/:groupId/subscriptions/:id/pay` | Mark **your** share paid this period |
 | `DELETE` | `/groups/:groupId/subscriptions/:id` | Soft-end (deactivate) |

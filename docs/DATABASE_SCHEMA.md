@@ -167,11 +167,12 @@ Recurring shared bills (streaming, etc.) split **evenly**. Amounts stay in cents
 
 | Table | Role |
 |-------|------|
-| `subscriptions` | Name, `amount_cents`, `billing_day` (1–28), `active`, optional `last_reminded_period` |
-| `subscription_members` | Who splits this subscription (must also be group members) |
+| `subscriptions` | Name, `amount_cents`, optional `pending_amount_cents` / `pending_from_period`, `billing_day` (1–28), `active` |
+| `subscription_members` | Who splits this subscription; `effective_from_period` is the first `YYYY-MM` they owe |
 | `subscription_payments` | Per-member share for period `YYYY-MM` (`PENDING` / `PAID`) |
 
-Adding or removing a member recomputes pending shares for the current period;
+Late joiners keep the current cycle unchanged and start splitting after the next
+billing date. Pending shares for a period only include members effective that period;
 already-`PAID` rows keep their recorded share.
 
 ## Cascading behavior
