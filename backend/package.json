@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit",
     "db:up": "PATH=\"$HOME/.docker/bin:/Applications/Docker.app/Contents/Resources/bin:$PATH\" docker compose -f ../docker-compose.yml up -d",
     "db:down": "PATH=\"$HOME/.docker/bin:/Applications/Docker.app/Contents/Resources/bin:$PATH\" docker compose -f ../docker-compose.yml down",
-    "db:migrate": "tsx --env-file=.env src/db/migrate.ts"
+    "db:migrate": "tsx --env-file=.env src/db/migrate.ts",
+    "reminders:run": "tsx --env-file=.env src/scripts/runReminders.ts"
   },
   "engines": {
     "node": ">=20"

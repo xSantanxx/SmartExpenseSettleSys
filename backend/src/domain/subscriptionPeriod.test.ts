@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { daysUntilBilling } from "../services/subscriptionReminders.js";
 import {
   currentPeriodKey,
   nextBillingDateIso,
@@ -16,5 +17,11 @@ describe("subscription billing period helpers", () => {
     const now = new Date(Date.UTC(2026, 2, 15));
     expect(currentPeriodKey(15, now)).toBe("2026-03");
     expect(nextBillingDateIso(15, now)).toBe("2026-04-15");
+  });
+
+  it("counts days until billing for reminder window", () => {
+    const now = new Date(Date.UTC(2026, 2, 13));
+    expect(daysUntilBilling("2026-03-15", now)).toBe(2);
+    expect(daysUntilBilling("2026-03-13", now)).toBe(0);
   });
 });

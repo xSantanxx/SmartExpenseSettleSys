@@ -1,7 +1,8 @@
 import { getPool } from "../db/pool.js";
 import { centsToDollars, dollarsToCents, splitEvenly } from "../domain/money.js";
-import { badRequest, forbidden, notFound } from "../errors/AppError.js";
+import { AppError, badRequest, forbidden, notFound } from "../errors/AppError.js";
 import { assertGroupMember, assertUsersAreMembers } from "./membership.js";
+import { notifyAddedToSubscription } from "./subscriptionNotify.js";
 
 export interface SubscriptionMemberView {
   userId: string;
@@ -59,7 +60,8 @@ export function nextBillingDateIso(billingDay: number, now = new Date()): string
  * Equal shares are recomputed from amount_cents / member count.
  * Already-PAID rows keep their recorded share; pending rows are refreshed.
  */
-async function syncPeriodPayments(
+/** Ensure payment rows exist for the period (used by list/add and reminder cron). */
+export async function syncPeriodPayments(
   subscriptionId: string,
   amountCents: number,
   periodKey: string
@@ -246,6 +248,7 @@ export async function createSubscription(
 
   const pool = getPool();
   const client = await pool.connect();
+  let id: string;
   try {
     await client.query("BEGIN");
     const inserted = await client.query<{ id: string }>(
@@ -254,7 +257,7 @@ export async function createSubscription(
        RETURNING id`,
       [groupId, name, amountCents, billingDay, requesterId]
     );
-    const id = inserted.rows[0].id;
+    id = inserted.rows[0].id;
     for (const userId of memberIds) {
       await client.query(
         `INSERT INTO subscription_members (subscription_id, user_id) VALUES ($1, $2)`,
@@ -262,13 +265,33 @@ export async function createSubscription(
       );
     }
     await client.query("COMMIT");
-    return loadSubscriptionDetail(id, requesterId);
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;
   } finally {
     client.release();
   }
+
+  const detail = await loadSubscriptionDetail(id, requesterId);
+  const adder = await pool.query<{ display_name: string }>(
+    `SELECT display_name FROM users WHERE id = $1`,
+    [requesterId]
+  );
+  const addedByName = adder.rows[0]?.display_name ?? "A group member";
+  for (const m of detail.members) {
+    if (m.userId === requesterId) continue;
+    void notifyAddedToSubscription({
+      toEmail: m.email,
+      toDisplayName: m.displayName,
+      addedByName,
+      subscriptionName: detail.name,
+      totalAmountCents: detail.amountCents,
+      shareCents: m.shareCents,
+      nextBillingDate: detail.nextBillingDate,
+      periodKey: detail.periodKey,
+    }).catch((err) => console.error("Add-to-subscription email failed:", err));
+  }
+  return detail;
 }
 
 export async function addSubscriptionMember(
@@ -292,23 +315,60 @@ export async function addSubscriptionMember(
       `SELECT id FROM users WHERE email = $1`,
       [input.email.trim().toLowerCase()]
     );
-    if (found.rowCount === 0) throw notFound("No account found with that email");
+    if (found.rowCount === 0) {
+      throw notFound(
+        "No account with that email — they must register on the site before you can add them"
+      );
+    }
     userId = found.rows[0].id;
   }
   if (!userId) throw badRequest("Provide email or userId");
 
-  await assertUsersAreMembers(groupId, [userId]);
+  try {
+    await assertUsersAreMembers(groupId, [userId]);
+  } catch (err) {
+    if (err instanceof AppError && err.statusCode === 403) {
+      throw forbidden(
+        "That person must be a member of this group before you can add them to the subscription"
+      );
+    }
+    throw err;
+  }
 
-  await pool.query(
+  const inserted = await pool.query<{ user_id: string }>(
     `INSERT INTO subscription_members (subscription_id, user_id)
      VALUES ($1, $2)
-     ON CONFLICT DO NOTHING`,
+     ON CONFLICT DO NOTHING
+     RETURNING user_id`,
     [subscriptionId, userId]
   );
+  const newlyAdded = (inserted.rowCount ?? 0) > 0;
 
   const periodKey = currentPeriodKey(billingDay);
   await syncPeriodPayments(subscriptionId, amountCents, periodKey);
-  return loadSubscriptionDetail(subscriptionId, requesterId);
+  const detail = await loadSubscriptionDetail(subscriptionId, requesterId);
+
+  if (newlyAdded && userId !== requesterId) {
+    const member = detail.members.find((m) => m.userId === userId);
+    const adder = await pool.query<{ display_name: string }>(
+      `SELECT display_name FROM users WHERE id = $1`,
+      [requesterId]
+    );
+    if (member) {
+      void notifyAddedToSubscription({
+        toEmail: member.email,
+        toDisplayName: member.displayName,
+        addedByName: adder.rows[0]?.display_name ?? "A group member",
+        subscriptionName: detail.name,
+        totalAmountCents: detail.amountCents,
+        shareCents: member.shareCents,
+        nextBillingDate: detail.nextBillingDate,
+        periodKey: detail.periodKey,
+      }).catch((err) => console.error("Add-to-subscription email failed:", err));
+    }
+  }
+
+  return detail;
 }
 
 export async function removeSubscriptionMember(

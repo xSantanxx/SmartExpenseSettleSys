@@ -92,25 +92,53 @@ Redeploy the API (or restart). Then open the Vercel site, register a user, and t
 
 ---
 
-## Optional: subscription email reminders
+## Subscription email (Resend)
 
-1. Create a free [Resend](https://resend.com) API key.
-2. On Render, set:
+Reminders email unpaid members within **3 days** of billing day.
+Add-to-subscription emails use the same key.
+
+### Where to put `RESEND_API_KEY`
+
+**Local** — `backend/.env` (never commit this file):
+
+```bash
+RESEND_API_KEY=re_xxxxxxxx
+CRON_SECRET=paste-output-of-openssl-rand-hex-16
+REMINDER_FROM_EMAIL=Smart Expense <onboarding@resend.dev>
+```
+
+Test manually: `cd backend && npm run reminders:run`
+
+**Production (Render)** — Dashboard → your API service → **Environment**:
 
 | Name | Value |
 |------|--------|
-| `RESEND_API_KEY` | `re_...` |
-| `CRON_SECRET` | random string (`openssl rand -hex 16`) |
-| `REMINDER_FROM_EMAIL` | verified sender, or Resend’s onboarding address |
+| `RESEND_API_KEY` | from [resend.com/api-keys](https://resend.com/api-keys) |
+| `CRON_SECRET` | `openssl rand -hex 16` |
+| `REMINDER_FROM_EMAIL` | `Smart Expense <onboarding@resend.dev>` until you verify a domain |
 
-3. Add a **Cron Job** (Render Cron / GitHub Action) daily:
+Redeploy after saving env vars.
+
+### Daily schedule (GitHub Actions)
+
+Workflow: `.github/workflows/subscription-reminders.yml` (runs daily + manual).
+
+Repo → **Settings → Secrets and variables → Actions**:
+
+| Secret | Value |
+|--------|--------|
+| `API_BASE_URL` | `https://YOUR-API.onrender.com` |
+| `CRON_SECRET` | **same** string as Render’s `CRON_SECRET` |
+
+Or hit once by hand:
 
 ```bash
 curl -X POST https://YOUR-API.onrender.com/cron/subscription-reminders \
   -H "X-Cron-Secret: $CRON_SECRET"
 ```
 
-Without Resend, subscriptions still work in the UI — emails are just skipped.
+Without Resend, subscriptions still work in the UI — emails are skipped.
+Only registered group members can be added to a subscription.
 
 ## Checklist
 

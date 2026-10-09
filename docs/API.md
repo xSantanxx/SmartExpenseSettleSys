@@ -120,11 +120,13 @@ Even split of a recurring bill (Netflix, Spotify, etc.).
 | Method | Path | Notes |
 |--------|------|-------|
 | `GET` | `/groups/:groupId/subscriptions` | Active subscriptions + current period |
-| `POST` | `/groups/:groupId/subscriptions` | `{ name, amount, billingDay (1–28), memberIds[] }` |
-| `POST` | `/groups/:groupId/subscriptions/:id/members` | `{ email }` or `{ userId }` — shares rebalance |
+| `POST` | `/groups/:groupId/subscriptions` | `{ name, amount, billingDay (1–28), memberIds[] }` — emails co-members when Resend is set |
+| `POST` | `/groups/:groupId/subscriptions/:id/members` | `{ email }` or `{ userId }` — must be a **registered** group member; shares rebalance; emails the new person |
 | `DELETE` | `/groups/:groupId/subscriptions/:id/members/:memberId` | Shares rebalance |
 | `POST` | `/groups/:groupId/subscriptions/:id/pay` | Mark **your** share paid this period |
 | `DELETE` | `/groups/:groupId/subscriptions/:id` | Soft-end (deactivate) |
+
+Unknown emails (no account) → **404**. Non–group-members → **403**.
 
 Reminders (server cron):
 

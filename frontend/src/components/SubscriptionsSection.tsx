@@ -155,6 +155,7 @@ export function SubscriptionsSection({
           <h2>Shared subscriptions</h2>
           <p className="muted" style={{ margin: 0 }}>
             Split streaming bills evenly. Shares update when people join or leave.
+            Unpaid members get an email reminder within 3 days of the billing day.
           </p>
         </div>
         <button
@@ -241,6 +242,11 @@ export function SubscriptionsSection({
           <button className="btn btn-primary" type="submit">
             Create subscription
           </button>
+          <p className="hint">
+            Only people already on this group (with an account) can be added.
+            They get an email with their share and billing date when Resend is
+            configured.
+          </p>
         </form>
       )}
 

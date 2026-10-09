@@ -1,0 +1,28 @@
+# Daily job: email unpaid subscription members within 3 days of billing day.
+# Secrets (repo Settings → Secrets and variables → Actions):
+#   API_BASE_URL  — e.g. https://smartexpensesettlesys.onrender.com
+#   CRON_SECRET   — same value as Render's CRON_SECRET env var
+name: Subscription reminders
+
+on:
+  schedule:
+    # 14:00 UTC daily (~ morning US East)
+    - cron: "0 14 * * *"
+  workflow_dispatch:
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger reminder endpoint
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$API_BASE_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "Missing API_BASE_URL or CRON_SECRET secrets — skipping."
+            exit 0
+          fi
+          curl -fsS -X POST "${API_BASE_URL%/}/cron/subscription-reminders" \
+            -H "X-Cron-Secret: ${CRON_SECRET}" \
+            -H "Content-Type: application/json"
