@@ -113,6 +113,24 @@ Percentage (values are percents; must total 100):
 | `GET` | `/groups/:groupId/settlements` | Regenerates PENDING, returns plan + history. Optional `?status=PENDING\|COMPLETED` |
 | `GET` | `/groups/:groupId/summary` | Totals, per-member balances, settlements |
 
+### Shared subscriptions (per group)
+
+Even split of a recurring bill (Netflix, Spotify, etc.).
+
+| Method | Path | Notes |
+|--------|------|-------|
+| `GET` | `/groups/:groupId/subscriptions` | Active subscriptions + current period |
+| `POST` | `/groups/:groupId/subscriptions` | `{ name, amount, billingDay (1–28), memberIds[] }` |
+| `POST` | `/groups/:groupId/subscriptions/:id/members` | `{ email }` or `{ userId }` — shares rebalance |
+| `DELETE` | `/groups/:groupId/subscriptions/:id/members/:memberId` | Shares rebalance |
+| `POST` | `/groups/:groupId/subscriptions/:id/pay` | Mark **your** share paid this period |
+| `DELETE` | `/groups/:groupId/subscriptions/:id` | Soft-end (deactivate) |
+
+Reminders (server cron):
+
+`POST /cron/subscription-reminders` with header `X-Cron-Secret: <CRON_SECRET>`  
+Emails unpaid members within 3 days of billing day when `RESEND_API_KEY` is set.
+
 ### Settlements
 
 `PATCH /settlements/:settlementId`

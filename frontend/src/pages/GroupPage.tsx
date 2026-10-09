@@ -8,6 +8,7 @@ import type {
   GroupSummaryPayload,
 } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
+import { SubscriptionsSection } from "../components/SubscriptionsSection";
 
 interface FriendPrompt {
   userId: string;
@@ -256,6 +257,14 @@ export function GroupPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {group && (
+        <SubscriptionsSection
+          groupId={groupId}
+          groupMembers={group.members}
+          friends={friends}
+        />
       )}
 
       <section className="section">

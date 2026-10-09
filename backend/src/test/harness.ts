@@ -105,6 +105,9 @@ async function startTestDb(): Promise<TestDb> {
       // TRUNCATE ... CASCADE clears dependents; restart identity for cleanliness.
       await pool.query(`
         TRUNCATE TABLE
+          subscription_payments,
+          subscription_members,
+          subscriptions,
           settlements,
           expense_participants,
           expenses,

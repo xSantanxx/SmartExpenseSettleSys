@@ -31,11 +31,14 @@ users ──────────────┐
   │    group_members│
   │◄────────────────┤
   │                 │
-  │                 ▼
-  │              expenses ◄── paid_by / created_by
+  │                 ├──► expenses ◄── paid_by / created_by
+  │                 │       │
+  │                 │       └── expense_participants
   │                 │
-  │    expense_participants
-  │◄────────────────┘
+  │                 └──► subscriptions
+  │                         │
+  │                         ├── subscription_members
+  │                         └── subscription_payments (period YYYY-MM)
   │
   └── settlements (from_user, to_user, group)
 ```
@@ -158,12 +161,26 @@ When expenses change (add/delete):
 
 That preserves “Bob paid Alice last week” while refreshing what is still owed.
 
+### `subscriptions` / `subscription_members` / `subscription_payments`
+
+Recurring shared bills (streaming, etc.) split **evenly**. Amounts stay in cents.
+
+| Table | Role |
+|-------|------|
+| `subscriptions` | Name, `amount_cents`, `billing_day` (1–28), `active`, optional `last_reminded_period` |
+| `subscription_members` | Who splits this subscription (must also be group members) |
+| `subscription_payments` | Per-member share for period `YYYY-MM` (`PENDING` / `PAID`) |
+
+Adding or removing a member recomputes pending shares for the current period;
+already-`PAID` rows keep their recorded share.
+
 ## Cascading behavior
 
 | Parent deleted | Children |
 |----------------|----------|
-| `groups` | members, expenses, settlements cascade |
+| `groups` | members, expenses, settlements, subscriptions cascade |
 | `expenses` | participants cascade |
+| `subscriptions` | members, payments cascade |
 | `users` | **RESTRICT** if still referenced | Prefer remove from groups first |
 
 Restricting user delete avoids silently rewriting financial history.

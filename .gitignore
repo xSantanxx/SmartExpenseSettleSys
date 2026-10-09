@@ -8,3 +8,4 @@ frontend/dist/
 coverage/
 data/
 *.pgdata/
+INTERVIEW_GUIDE.md

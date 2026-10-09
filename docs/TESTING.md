@@ -4,7 +4,7 @@
 
 | Layer | Tooling | Purpose |
 |-------|---------|---------|
-| Domain (`money`, `balances`, `settlement`) | Vitest unit tests | Algorithm correctness without I/O — interview-friendly |
+| Domain (`money`, `balances`, `settlement`, subscription period) | Vitest unit tests | Algorithm correctness without I/O — interview-friendly |
 | HTTP wiring | Supertest against `createApp()` | 401/404 paths that need no DB |
 | API + Postgres | Supertest + **embedded PostgreSQL** | AuthZ, validation, transactions, settlement regeneration |
 

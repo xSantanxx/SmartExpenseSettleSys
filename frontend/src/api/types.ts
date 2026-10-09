@@ -106,3 +106,31 @@ export interface GroupSummaryPayload {
 export interface ApiErrorBody {
   error: { message: string; code?: string };
 }
+
+export interface SubscriptionMember {
+  userId: string;
+  displayName: string;
+  email: string;
+  shareCents: number;
+  share: string;
+  status: "PENDING" | "PAID";
+  paidAt: string | null;
+}
+
+export interface SubscriptionDetail {
+  id: string;
+  groupId: string;
+  name: string;
+  amountCents: number;
+  amount: string;
+  billingDay: number;
+  periodKey: string;
+  nextBillingDate: string;
+  active: boolean;
+  createdBy: string;
+  createdAt: string;
+  members: SubscriptionMember[];
+  yourShareCents: number;
+  yourShare: string;
+  yourStatus: "PENDING" | "PAID" | "NOT_MEMBER";
+}

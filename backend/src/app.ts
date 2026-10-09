@@ -3,6 +3,7 @@ import express from "express";
 import { config } from "./config.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { authRouter } from "./routes/auth.js";
+import { cronRouter } from "./routes/cron.js";
 import { friendsRouter } from "./routes/friends.js";
 import { groupsRouter } from "./routes/groups.js";
 import { settlementsRouter } from "./routes/settlements.js";
@@ -49,6 +50,7 @@ export function createApp() {
   app.use("/friends", friendsRouter);
   app.use("/groups", groupsRouter);
   app.use("/settlements", settlementsRouter);
+  app.use("/cron", cronRouter);
 
   // 404 for unknown routes
   app.use((_req, res) => {

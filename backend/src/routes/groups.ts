@@ -6,10 +6,12 @@ import { requireUser } from "../middleware/requireUser.js";
 import * as expenses from "../services/expenses.js";
 import * as groups from "../services/groups.js";
 import * as settlements from "../services/settlements.js";
+import { subscriptionsRouter } from "./subscriptions.js";
 
 export const groupsRouter = Router();
 
 groupsRouter.use(requireUser);
+groupsRouter.use("/:groupId/subscriptions", subscriptionsRouter);
 
 groupsRouter.post(
   "/",

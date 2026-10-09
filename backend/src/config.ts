@@ -37,4 +37,10 @@ export const config = {
       .map((s) => s.trim().replace(/\/$/, ""))
       .filter(Boolean);
   },
+  /** Protects POST /cron/subscription-reminders */
+  cronSecret: () => process.env.CRON_SECRET ?? "",
+  /** Optional Resend API key for subscription reminder emails */
+  resendApiKey: () => process.env.RESEND_API_KEY ?? "",
+  reminderFromEmail: () =>
+    process.env.REMINDER_FROM_EMAIL ?? "Smart Expense <onboarding@resend.dev>",
 };

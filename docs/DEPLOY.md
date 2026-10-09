@@ -92,6 +92,26 @@ Redeploy the API (or restart). Then open the Vercel site, register a user, and t
 
 ---
 
+## Optional: subscription email reminders
+
+1. Create a free [Resend](https://resend.com) API key.
+2. On Render, set:
+
+| Name | Value |
+|------|--------|
+| `RESEND_API_KEY` | `re_...` |
+| `CRON_SECRET` | random string (`openssl rand -hex 16`) |
+| `REMINDER_FROM_EMAIL` | verified sender, or Resend’s onboarding address |
+
+3. Add a **Cron Job** (Render Cron / GitHub Action) daily:
+
+```bash
+curl -X POST https://YOUR-API.onrender.com/cron/subscription-reminders \
+  -H "X-Cron-Secret: $CRON_SECRET"
+```
+
+Without Resend, subscriptions still work in the UI — emails are just skipped.
+
 ## Checklist
 
 - [ ] Neon `DATABASE_URL` works

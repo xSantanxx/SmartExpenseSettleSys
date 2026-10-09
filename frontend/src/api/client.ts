@@ -8,6 +8,7 @@ import type {
   MemberBalance,
   SettlementDetail,
   SplitMethod,
+  SubscriptionDetail,
   User,
   ApiErrorBody,
 } from "./types";
@@ -244,6 +245,69 @@ export const api = {
     return request(`/settlements/${settlementId}`, {
       method: "PATCH",
       body: JSON.stringify({ status: "COMPLETED" }),
+    });
+  },
+
+  listSubscriptions(groupId: string): Promise<SubscriptionDetail[]> {
+    return request(`/groups/${groupId}/subscriptions`);
+  },
+
+  createSubscription(
+    groupId: string,
+    body: {
+      name: string;
+      amount: string;
+      billingDay: number;
+      memberIds: string[];
+    }
+  ): Promise<SubscriptionDetail> {
+    return request(`/groups/${groupId}/subscriptions`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  addSubscriptionMember(
+    groupId: string,
+    subscriptionId: string,
+    body: { email?: string; userId?: string }
+  ): Promise<SubscriptionDetail> {
+    return request(
+      `/groups/${groupId}/subscriptions/${subscriptionId}/members`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      }
+    );
+  },
+
+  removeSubscriptionMember(
+    groupId: string,
+    subscriptionId: string,
+    memberId: string
+  ): Promise<SubscriptionDetail> {
+    return request(
+      `/groups/${groupId}/subscriptions/${subscriptionId}/members/${memberId}`,
+      { method: "DELETE" }
+    );
+  },
+
+  markSubscriptionPaid(
+    groupId: string,
+    subscriptionId: string
+  ): Promise<SubscriptionDetail> {
+    return request(
+      `/groups/${groupId}/subscriptions/${subscriptionId}/pay`,
+      { method: "POST" }
+    );
+  },
+
+  deactivateSubscription(
+    groupId: string,
+    subscriptionId: string
+  ): Promise<void> {
+    return request(`/groups/${groupId}/subscriptions/${subscriptionId}`, {
+      method: "DELETE",
     });
   },
 };
