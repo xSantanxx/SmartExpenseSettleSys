@@ -24,6 +24,10 @@ const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.repl
   ""
 ) ?? "/api";
 
+/** Render free tier can take 30–60s to wake from sleep. */
+const REQUEST_TIMEOUT_MS = 60_000;
+const MAX_RETRIES = 3;
+
 export function getStoredToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -45,6 +49,17 @@ export class ApiError extends Error {
   }
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryable(status: number | null, err: unknown): boolean {
+  if (status === 502 || status === 503 || status === 504) return true;
+  if (err instanceof DOMException && err.name === "AbortError") return true;
+  if (err instanceof TypeError) return true; // network / failed to fetch
+  return false;
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {}
@@ -58,24 +73,71 @@ async function request<T>(
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  let lastError: unknown;
 
-  if (res.status === 204) {
-    return undefined as T;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    try {
+      const res = await fetch(`${API_BASE}${path}`, {
+        ...options,
+        headers,
+        signal: controller.signal,
+      });
+
+      if (res.status === 204) {
+        return undefined as T;
+      }
+
+      // Cold start / gateway errors — wait and retry.
+      if (
+        isRetryable(res.status, null) &&
+        attempt < MAX_RETRIES
+      ) {
+        await sleep(1500 * attempt);
+        continue;
+      }
+
+      const data: unknown = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        const body = data as ApiErrorBody;
+        throw new ApiError(
+          body.error?.message ?? `Request failed (${res.status})`,
+          res.status,
+          body.error?.code
+        );
+      }
+
+      return data as T;
+    } catch (err) {
+      lastError = err;
+      if (err instanceof ApiError) throw err;
+      if (attempt < MAX_RETRIES && isRetryable(null, err)) {
+        await sleep(1500 * attempt);
+        continue;
+      }
+      if (err instanceof DOMException && err.name === "AbortError") {
+        throw new ApiError(
+          "Server is taking too long to respond (it may be waking up). Try again.",
+          504,
+          "TIMEOUT"
+        );
+      }
+      throw new ApiError(
+        "Cannot reach the API. The free server may be asleep — wait a few seconds and retry.",
+        0,
+        "NETWORK"
+      );
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
-  const data: unknown = await res.json().catch(() => ({}));
-
-  if (!res.ok) {
-    const body = data as ApiErrorBody;
-    throw new ApiError(
-      body.error?.message ?? `Request failed (${res.status})`,
-      res.status,
-      body.error?.code
-    );
-  }
-
-  return data as T;
+  throw lastError instanceof Error
+    ? lastError
+    : new ApiError("Request failed", 0, "NETWORK");
 }
 
 export const api = {

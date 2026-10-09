@@ -4,7 +4,7 @@ import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 
 export function RegisterPage() {
-  const { user, register } = useAuth();
+  const { user, register, waking } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -34,6 +34,12 @@ export function RegisterPage() {
         <h1>Create account</h1>
         <p className="muted">Track group expenses and get an optimized settlement plan.</p>
         {error && <p className="error-banner">{error}</p>}
+        {(submitting || waking) && (
+          <p className="hint">
+            If this is the first visit in a while, the free API may need ~30–60s
+            to wake up.
+          </p>
+        )}
         <label>
           Display name
           <input

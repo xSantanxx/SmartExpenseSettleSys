@@ -4,7 +4,7 @@ import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 
 export function LoginPage() {
-  const { user, login } = useAuth();
+  const { user, login, waking } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -33,6 +33,12 @@ export function LoginPage() {
         <h1>Log in</h1>
         <p className="muted">Settle shared expenses without the spreadsheet chaos.</p>
         {error && <p className="error-banner">{error}</p>}
+        {(submitting || waking) && (
+          <p className="hint">
+            If this is the first visit in a while, the free API may need ~30–60s
+            to wake up.
+          </p>
+        )}
         <label>
           Email
           <input

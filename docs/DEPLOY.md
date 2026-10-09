@@ -49,7 +49,12 @@ You do **not** need Docker in production. Neon *is* your Postgres.
 6. Deploy. Note the API URL, e.g. `https://sess-api.onrender.com`.
 7. Check `https://sess-api.onrender.com/health` → `{ "status": "ok" }`.
 
-`npm start` runs migrations, then the server. Free Render services sleep when idle; the first request after sleep can take ~30s.
+`npm start` runs migrations, then the server.
+
+**Free Render sleep:** the API shuts down after ~15 minutes idle. The next
+request can take **30–60 seconds** (or fail once) while it wakes. The frontend
+retries and shows a “waking up” message. For a demo, open the site a minute
+early, or upgrade Render so it stays awake.
 
 ---
 
